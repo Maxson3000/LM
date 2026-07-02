@@ -127,21 +127,17 @@ function LookChatDemo({ messages, setMessages, onAddReference }: LookChatProps) 
         throw new Error(`HTTP ${res.status}`);
       }
 
-      const encoded = res.headers.get("X-Assistant-Text") ?? "";
-      let replyText = "";
-      try {
-        replyText = decodeURIComponent(encoded);
-      } catch {
-        replyText = encoded;
-      }
+      const data = (await res.json()) as { text?: string; image?: string | null };
 
-      const blob = await res.blob();
-      const imageUrl = trackUrl(URL.createObjectURL(blob));
+      let imageUrl: string | undefined;
+      if (data.image) {
+        imageUrl = trackUrl(`data:image/jpeg;base64,${data.image}`);
+      }
 
       const botMsg: Msg = {
         id: uid(),
         role: "assistant",
-        text: replyText || undefined,
+        text: data.text || undefined,
         imageSrc: imageUrl,
         imageAlt: "Сгенерированный образ",
       };
