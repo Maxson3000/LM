@@ -166,10 +166,10 @@ function LookChatDemo({ messages, setMessages, onAddReference }: LookChatProps) 
   ];
 
   return (
-    <div id="chat" className="relative flex min-h-[calc(100vh-7rem)] flex-col sm:min-h-[calc(100vh-6rem)]">
+    <div id="chat" className="relative flex h-[calc(100vh-7rem)] flex-col sm:h-[calc(100vh-6rem)]">
       <div className="pointer-events-none absolute -inset-1 rounded-[22px] bg-gradient-to-r from-rose-200/70 via-violet-200/70 to-sky-200/70 blur-xl" />
 
-      <div className="relative flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-[22px] border border-white/70 bg-white/75 shadow-xl shadow-violet-200/40 backdrop-blur-xl sm:min-h-[calc(100vh-6rem)]">
+      <div className="relative flex h-full flex-col overflow-hidden rounded-[22px] border border-white/70 bg-white/75 shadow-xl shadow-violet-200/40 backdrop-blur-xl">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/60 px-4 py-3 sm:px-6 sm:py-4">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-slate-800 sm:text-base">
@@ -230,12 +230,12 @@ function LookChatDemo({ messages, setMessages, onAddReference }: LookChatProps) 
                   ].join(" ")}
                 >
                   {m.imageSrc && (
-                    <div className="p-1">
+                    <div className="bg-slate-100/70 p-1">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={m.imageSrc}
                         alt={m.imageAlt ?? "Референс"}
-                        className="max-h-56 w-full rounded-xl object-cover"
+                        className="mx-auto max-h-[28rem] max-w-full rounded-xl object-contain"
                       />
                     </div>
                   )}
