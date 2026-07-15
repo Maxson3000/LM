@@ -15,9 +15,25 @@ export type ValidationResult = {
 }
 export type GenerationResult = { text: string; imageBuffer: Buffer | null }
 
-const fileToDataUrl = (file: Express.Multer.File): string => {
-  const mime = file.mimetype || "image/jpeg"
-  return `data:${mime};base64,${file.buffer.toString("base64")}`
+const MAX_UPLOAD_DIMENSION = 1536
+
+const fileToDataUrl = async (file: Express.Multer.File): Promise<string> => {
+  try {
+    const normalized = await sharp(file.buffer)
+      .rotate()
+      .resize({
+        width: MAX_UPLOAD_DIMENSION,
+        height: MAX_UPLOAD_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 85, mozjpeg: true })
+      .toBuffer()
+    return `data:image/jpeg;base64,${normalized.toString("base64")}`
+  } catch {
+    const mime = file.mimetype || "image/jpeg"
+    return `data:${mime};base64,${file.buffer.toString("base64")}`
+  }
 }
 
 const dataUrlToBuffer = (url: string): Buffer | null => {
@@ -83,7 +99,7 @@ export const validateRequest = async (
     return { ok: false, reason: "не приложено ни одного фото" }
   }
 
-  const dataUrls = files.map((f) => fileToDataUrl(f))
+  const dataUrls = await Promise.all(files.map((f) => fileToDataUrl(f)))
   const userText = text.trim().slice(0, 600)
   const hasReferences = files.length > 1
 
@@ -201,7 +217,7 @@ export const generateDressedImage = async (
   referenceText?: string,
   presetPrompt?: string,
 ): Promise<GenerationResult> => {
-  const dataUrl = fileToDataUrl(file)
+  const dataUrl = await fileToDataUrl(file)
 
   let fullPrompt: string
   if (presetPrompt && presetPrompt.trim().length >= 50) {

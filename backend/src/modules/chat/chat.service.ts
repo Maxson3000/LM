@@ -71,6 +71,9 @@ const aiFlow = async (
 
 const upstreamErrorText = (err: unknown): string => {
   const msg = err instanceof Error ? err.message : String(err)
+  if (/^API\s+\w+\s+https?:\/\/\S+\s+->\s+timeout/i.test(msg)) {
+    return "Генерация занимает слишком много времени. Попробуйте ещё раз или используйте фото меньшего размера."
+  }
   if (/^API\s+\w+\s+https?:\/\/\S+\s+->\s+\d{3}/i.test(msg)) {
     return "Сервис генерации временно недоступен. Попробуйте ещё раз через минуту."
   }

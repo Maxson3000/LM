@@ -8,7 +8,7 @@ export const config = {
   port: num("PORT", 3001),
   host: env("HOST", "0.0.0.0"),
   uploadDir: env("UPLOAD_DIR", "uploads"),
-  maxFileSizeMb: num("MAX_FILE_SIZE_MB", 10),
+  maxFileSizeMb: num("MAX_FILE_SIZE_MB", 20),
   maxFiles: num("MAX_FILES", 8),
   corsOrigin: env("CORS_ORIGIN", "http://localhost:3000"),
   routerai: {

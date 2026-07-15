@@ -123,8 +123,16 @@ function LookChatDemo({ messages, setMessages, onAddReference }: LookChatProps) 
         method: "POST",
         body: fd,
       });
+
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        let serverMessage: string | undefined;
+        try {
+          const errBody = (await res.json()) as { error?: string };
+          serverMessage = errBody.error;
+        } catch {
+          // ответ не JSON — оставляем serverMessage пустым
+        }
+        throw new Error(serverMessage || `HTTP ${res.status}`);
       }
 
       const data = (await res.json()) as { text?: string; image?: string | null };
@@ -235,7 +243,7 @@ function LookChatDemo({ messages, setMessages, onAddReference }: LookChatProps) 
                       <img
                         src={m.imageSrc}
                         alt={m.imageAlt ?? "Референс"}
-                        className="max-h-56 w-full rounded-xl object-cover"
+                        className="max-h-[420px] w-auto max-w-full rounded-xl object-contain"
                       />
                     </div>
                   )}

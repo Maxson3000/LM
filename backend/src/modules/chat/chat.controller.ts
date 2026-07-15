@@ -1,7 +1,6 @@
 import { Router } from "express"
 import type { Request, Response, NextFunction } from "express"
-import { upload } from "../../middlewares/upload.middleware.js"
-import { config } from "../../config/env.js"
+import { uploadChatFiles } from "../../middlewares/upload.middleware.js"
 import { chatService } from "./chat.service.js"
 
 class ChatController {
@@ -30,4 +29,4 @@ export const chatController = new ChatController()
 
 export const chatRouter = Router()
 
-chatRouter.post("/chat", upload.array("files", config.maxFiles), chatController.handle)
+chatRouter.post("/chat", uploadChatFiles, chatController.handle)
