@@ -1,0 +1,202 @@
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const sendChatRequest = vi.fn();
+vi.mock("../lib/api", async () => {
+  const actual = await vi.importActual<typeof import("../lib/api")>("../lib/api");
+  return { ...actual, sendChatRequest: (...a: unknown[]) => sendChatRequest(...a) };
+});
+
+import { ChatApiError } from "../lib/api";
+import { MAX_ATTACHMENTS } from "../lib/constants";
+import { useChat } from "./useChat";
+
+let counter = 0;
+beforeEach(() => {
+  counter = 0;
+  sendChatRequest.mockReset();
+  vi.stubGlobal("URL", {
+    ...URL,
+    createObjectURL: () => `blob:test/${counter++}`,
+    revokeObjectURL: () => {},
+  });
+});
+afterEach(() => vi.restoreAllMocks());
+
+const img = (name = "p.jpg") => new File(["x"], name, { type: "image/jpeg" });
+
+describe("useChat — вложения", () => {
+  it("принимает только картинки", () => {
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.addFiles([img(), new File(["t"], "a.txt", { type: "text/plain" })]));
+    expect(result.current.state.attachments).toHaveLength(1);
+  });
+
+  it("не превышает лимит вложений", () => {
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.addFiles(Array.from({ length: MAX_ATTACHMENTS + 3 }, () => img())));
+    expect(result.current.state.attachments).toHaveLength(MAX_ATTACHMENTS);
+    expect(result.current.state.atLimit).toBe(true);
+  });
+
+  it("удаляет вложение по индексу", () => {
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.addFiles([img("a.jpg"), img("b.jpg")]));
+    act(() => result.current.actions.removeAttachment(0));
+    expect(result.current.state.attachments.map((a) => a.file.name)).toEqual(["b.jpg"]);
+  });
+});
+
+describe("useChat — canSend", () => {
+  it("false без ввода и вложений", () => {
+    const { result } = renderHook(() => useChat());
+    expect(result.current.state.canSend).toBe(false);
+  });
+
+  it("true при непустом тексте", () => {
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("деловой костюм"));
+    expect(result.current.state.canSend).toBe(true);
+  });
+
+  it("false пока идёт запрос", async () => {
+    sendChatRequest.mockReturnValue(new Promise(() => {}));
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("костюм"));
+    act(() => void result.current.actions.send());
+    await waitFor(() => expect(result.current.state.loading).toBe(true));
+    expect(result.current.state.canSend).toBe(false);
+  });
+});
+
+describe("useChat — send", () => {
+  it("добавляет сообщение пользователя и ответ ассистента", async () => {
+    sendChatRequest.mockResolvedValue({ text: "Готово!", image: null });
+    const { result } = renderHook(() => useChat());
+
+    act(() => result.current.actions.setInput("деловой костюм"));
+    await act(async () => void (await result.current.actions.send()));
+
+    const { messages } = result.current.state;
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({ role: "user", text: "деловой костюм" });
+    expect(messages[1]).toMatchObject({ role: "assistant", text: "Готово!" });
+  });
+
+  it("очищает ввод и вложения после отправки", async () => {
+    sendChatRequest.mockResolvedValue({ text: "ок", image: null });
+    const { result } = renderHook(() => useChat());
+    act(() => {
+      result.current.actions.setInput("костюм");
+      result.current.actions.addFiles([img()]);
+    });
+
+    await act(async () => void (await result.current.actions.send()));
+
+    expect(result.current.state.input).toBe("");
+    expect(result.current.state.attachments).toHaveLength(0);
+  });
+
+  it("показывает текст ошибки от бэкенда как есть", async () => {
+    sendChatRequest.mockRejectedValue(new ChatApiError("Недостаточно средств на балансе"));
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("костюм"));
+
+    await act(async () => void (await result.current.actions.send()));
+
+    const last = result.current.state.messages.at(-1)!;
+    expect(last.role).toBe("assistant");
+    expect(last.text).toBe("Недостаточно средств на балансе");
+  });
+
+  it("на неизвестную ошибку показывает дружелюбный текст, а не стектрейс", async () => {
+    sendChatRequest.mockRejectedValue(new TypeError("fetch failed"));
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("костюм"));
+
+    await act(async () => void (await result.current.actions.send()));
+
+    expect(result.current.state.messages.at(-1)!.text).toMatch(/связаться с сервером/i);
+  });
+
+  it("не отправляет пустой запрос", async () => {
+    const { result } = renderHook(() => useChat());
+    await act(async () => void (await result.current.actions.send()));
+    expect(sendChatRequest).not.toHaveBeenCalled();
+  });
+
+  it("передаёт файлы и историю в запрос", async () => {
+    sendChatRequest.mockResolvedValue({ text: "ок", image: null });
+    const { result } = renderHook(() => useChat());
+    act(() => {
+      result.current.actions.setInput("костюм");
+      result.current.actions.addFiles([img("me.jpg")]);
+    });
+
+    await act(async () => void (await result.current.actions.send()));
+
+    const [text, files, history] = sendChatRequest.mock.calls[0]!;
+    expect(text).toBe("костюм");
+    expect(files).toHaveLength(1);
+    expect(history).toEqual([]); // первое сообщение — истории ещё нет
+  });
+});
+
+describe("useChat — регрессии", () => {
+  // Регрессия: общий Context перерисовывал галерею на каждую букву.
+  // Actions должны иметь стабильную ссылку между рендерами.
+  it("ссылка на actions стабильна при изменении состояния", () => {
+    const { result } = renderHook(() => useChat());
+    const before = result.current.actions;
+
+    act(() => result.current.actions.setInput("печатаю"));
+
+    expect(result.current.actions).toBe(before);
+  });
+
+  // Регрессия: «Новый чат» во время генерации не отменял запрос, и ответ
+  // прилетал в уже очищенный чат.
+  it("reset прерывает текущий запрос", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    sendChatRequest.mockImplementation((_t, _f, _h, signal: AbortSignal) => {
+      capturedSignal = signal;
+      return new Promise(() => {});
+    });
+    const { result } = renderHook(() => useChat());
+
+    act(() => result.current.actions.setInput("костюм"));
+    act(() => void result.current.actions.send());
+    await waitFor(() => expect(result.current.state.loading).toBe(true));
+
+    act(() => result.current.actions.reset());
+
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(result.current.state.loading).toBe(false);
+    expect(result.current.state.messages).toHaveLength(0);
+  });
+
+  it("отменённый ответ не попадает в чат", async () => {
+    let rejectFn: (e: unknown) => void = () => {};
+    sendChatRequest.mockImplementation(
+      (_t, _f, _h, signal: AbortSignal) =>
+        new Promise((_res, rej) => {
+          rejectFn = rej;
+          signal.addEventListener("abort", () =>
+            rej(new DOMException("aborted", "AbortError")),
+          );
+        }),
+    );
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("костюм"));
+    act(() => void result.current.actions.send());
+    await waitFor(() => expect(result.current.state.loading).toBe(true));
+
+    await act(async () => {
+      result.current.actions.reset();
+      rejectFn(new DOMException("aborted", "AbortError"));
+    });
+
+    // после reset — чист, призрачный ответ не добавился
+    expect(result.current.state.messages).toHaveLength(0);
+  });
+});

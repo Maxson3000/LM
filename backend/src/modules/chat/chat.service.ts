@@ -1,8 +1,10 @@
 import {
+  adviseOutfit,
   generateDressedImage,
   isConfigured as isAiConfigured,
   validateRequest,
 } from "../../services/routerai.service.js"
+import { buildSearchLinks } from "../../services/marketplace.service.js"
 import type {
   Msg,
   ProcessChatInput,
@@ -52,6 +54,34 @@ const aiFlow = async (
     return {
       text: `Не получилось: ${reason}. Опишите стиль одежды (casual, old money, деловой, вечерний и т.п.) и приложите фото человека по пояс или в полный рост — тогда получится сгенерировать образ.`,
       image: null,
+    }
+  }
+
+  // Подбор образа: текст стилиста + ссылки на поиск вещей + главный образ,
+  // отрисованный на фото человека, чтобы он увидел, как это на нём смотрится.
+  if (validation.intent === "advice") {
+    const advice = await adviseOutfit(first, text)
+
+    // Картинка — приятный бонус, а не обязательная часть: если генерация не
+    // удалась, совет и ссылки всё равно уходят пользователю.
+    let image: Buffer | null = null
+    if (advice.generationPrompt) {
+      const look = await generateDressedImage(
+        first,
+        text,
+        undefined,
+        advice.generationPrompt,
+      )
+      image = look.imageBuffer
+    }
+
+    return {
+      text: advice.text || "Не получилось составить рекомендации, попробуйте ещё раз.",
+      image,
+      products: advice.items.map((item) => ({
+        title: item.title,
+        links: buildSearchLinks(item.query),
+      })),
     }
   }
 

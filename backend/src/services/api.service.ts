@@ -78,14 +78,18 @@ export const apiRequest = async <T = unknown>(input: ApiRequestInput): Promise<T
       const isHttpError = err instanceof Error && /^API\s/.test(err.message)
       if (isHttpError) throw err
 
+      // Таймаут не повторяем: запрос тяжёлый (фото в base64), и три попытки
+      // по timeoutMs превращают одну медленную генерацию в многоминутное ожидание.
+      // Повторяем только сетевые сбои — они отваливаются быстро.
       const aborted = err instanceof Error && err.name === "AbortError"
+      if (aborted) {
+        throw new Error(`API ${method} ${url} -> timeout after ${timeoutMs}ms`)
+      }
       if (attempt < retries) {
         await sleep(1000 * 2 ** attempt)
         continue
       }
-      throw aborted
-        ? new Error(`API ${method} ${url} -> timeout after ${timeoutMs}ms`)
-        : err
+      throw err
     } finally {
       clearTimeout(timer)
     }

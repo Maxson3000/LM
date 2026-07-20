@@ -18,6 +18,7 @@ class ChatController {
       res.json({
         text: result.text,
         image: result.image ? result.image.toString("base64") : null,
+        products: result.products ?? [],
       })
     } catch (err) {
       next(err)

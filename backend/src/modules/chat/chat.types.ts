@@ -14,7 +14,10 @@ export type ProcessChatInput = {
   files: Express.Multer.File[]
 }
 
+import type { ProductSuggestion } from "../../services/marketplace.service.js"
+
 export type ProcessChatResult = {
   text: string
   image: Buffer | null
+  products?: ProductSuggestion[]
 }

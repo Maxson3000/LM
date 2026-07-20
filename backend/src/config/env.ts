@@ -16,11 +16,11 @@ export const config = {
     baseUrl: env("ROUTERAI_BASE_URL", "https://routerai.ru/api/v1"),
     validationModel: env(
       "ROUTERAI_VALIDATION_MODEL",
-      "openai/gpt-4o-mini",
+      "google/gemini-2.5-flash",
     ),
     generationModel: env(
       "ROUTERAI_GENERATION_MODEL",
-      "openai/gpt-image-1-mini",
+      "google/gemini-3.1-flash-image",
     ),
   },
 } as const
