@@ -5,7 +5,8 @@ import { MAX_ATTACHMENTS } from "../../lib/constants";
 import { useChatActions, useChatState } from "./ChatProvider";
 
 export function ChatComposer() {
-  const { input, attachments, canSend, loading, atLimit } = useChatState();
+  const { input, attachments, canSend, loading, atLimit, photoRemembered } =
+    useChatState();
   const { setInput, addFiles, removeAttachment, send } = useChatActions();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -18,6 +19,11 @@ export function ChatComposer() {
     <div className="shrink-0 border-t border-white/60 bg-white/55 px-4 py-4 backdrop-blur-xl sm:px-6">
       {attachments.length > 0 && (
         <div className="mx-auto mb-2 flex max-w-3xl flex-wrap items-center gap-2">
+          {photoRemembered && (
+            <span className="mr-1 text-xs text-slate-500">
+              Работаю с этим фото — можно просто написать следующий запрос
+            </span>
+          )}
           {attachments.map((a, i) => (
             <div
               key={a.url}

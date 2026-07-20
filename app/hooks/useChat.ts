@@ -16,6 +16,8 @@ export type ChatState = {
   loading: boolean;
   canSend: boolean;
   atLimit: boolean;
+  /** Фото уже отправлялось и закреплено за разговором — следующий запрос переиспользует его. */
+  photoRemembered: boolean;
 };
 
 export type ChatActions = {
@@ -39,15 +41,18 @@ export const useChat = (): { state: ChatState; actions: ChatActions } => {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  // Фото закрепляется за разговором и переиспользуется в следующих запросах.
+  // photoShown = его уже показали в пузыре пользователя, повторно не дублируем.
+  const [photoShown, setPhotoShown] = useState(false);
 
   const urls = useRef(new ObjectUrlRegistry());
   const inflight = useRef<AbortController | null>(null);
 
   // Свежее состояние для send(), чтобы у него была стабильная ссылка.
   // Пишем в effect, а не во время рендера — ref не должен меняться в рендере.
-  const latest = useRef({ input, attachments, messages, loading });
+  const latest = useRef({ input, attachments, messages, loading, photoShown });
   useEffect(() => {
-    latest.current = { input, attachments, messages, loading };
+    latest.current = { input, attachments, messages, loading, photoShown };
   });
 
   useEffect(() => {
@@ -75,13 +80,17 @@ export const useChat = (): { state: ChatState; actions: ChatActions } => {
         })),
       ];
     });
+    // Новое фото — покажем его в следующем сообщении пользователя.
+    setPhotoShown(false);
   }, []);
 
   const removeAttachment = useCallback((index: number) => {
     setAttachments((prev) => {
       const target = prev[index];
       if (target) urls.current.release(target.url);
-      return prev.filter((_, i) => i !== index);
+      const next = prev.filter((_, i) => i !== index);
+      if (next.length === 0) setPhotoShown(false);
+      return next;
     });
   }, []);
 
@@ -94,6 +103,7 @@ export const useChat = (): { state: ChatState; actions: ChatActions } => {
     setAttachments([]);
     setInput("");
     setLoading(false);
+    setPhotoShown(false);
   }, []);
 
   const addReference = useCallback((item: GalleryItem) => {
@@ -110,24 +120,28 @@ export const useChat = (): { state: ChatState; actions: ChatActions } => {
   }, []);
 
   const send = useCallback(async () => {
-    const { input, attachments, messages, loading } = latest.current;
+    const { input, attachments, messages, loading, photoShown } = latest.current;
     const text = input.trim();
-    if ((!text && attachments.length === 0) || loading) return;
+    const hasFreshPhoto = attachments.length > 0 && !photoShown;
+    if ((!text && !hasFreshPhoto) || loading) return;
 
     const userMsg: Msg = {
       id: uid(),
       role: "user",
-      text: text || "(вложение без текста)",
+      text: text || "(фото без описания)",
     };
     const cover = attachments[0];
-    if (cover) {
+    // Фото прикрепляем к пузырю только когда оно новое — на follow-up по тому же
+    // фото не дублируем превью, но само фото уходит в запрос повторно.
+    if (cover && !photoShown) {
       userMsg.imageSrc = cover.url;
       userMsg.imageAlt = cover.file.name || "Загруженное фото";
     }
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setAttachments([]);
+    // Вложения НЕ сбрасываем — фото закреплено за разговором. Помечаем показанным.
+    if (cover) setPhotoShown(true);
     setLoading(true);
 
     const controller = new AbortController();
@@ -186,10 +200,15 @@ export const useChat = (): { state: ChatState; actions: ChatActions } => {
       attachments,
       input,
       loading,
-      canSend: (input.trim().length > 0 || attachments.length > 0) && !loading,
+      // Отправка возможна при тексте или НОВОМ фото. Закреплённое фото само по
+      // себе кнопку не активирует — иначе follow-up уходил бы с пустым текстом.
+      canSend:
+        (input.trim().length > 0 || (attachments.length > 0 && !photoShown)) &&
+        !loading,
       atLimit: attachments.length >= MAX_ATTACHMENTS,
+      photoRemembered: attachments.length > 0 && photoShown,
     }),
-    [messages, attachments, input, loading],
+    [messages, attachments, input, loading, photoShown],
   );
 
   return { state, actions };

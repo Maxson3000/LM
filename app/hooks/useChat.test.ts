@@ -83,7 +83,7 @@ describe("useChat — send", () => {
     expect(messages[1]).toMatchObject({ role: "assistant", text: "Готово!" });
   });
 
-  it("очищает ввод и вложения после отправки", async () => {
+  it("очищает ввод, но фото остаётся закреплённым за разговором", async () => {
     sendChatRequest.mockResolvedValue({ text: "ок", image: null });
     const { result } = renderHook(() => useChat());
     act(() => {
@@ -94,7 +94,8 @@ describe("useChat — send", () => {
     await act(async () => void (await result.current.actions.send()));
 
     expect(result.current.state.input).toBe("");
-    expect(result.current.state.attachments).toHaveLength(0);
+    expect(result.current.state.attachments).toHaveLength(1);
+    expect(result.current.state.photoRemembered).toBe(true);
   });
 
   it("показывает текст ошибки от бэкенда как есть", async () => {
@@ -139,6 +140,82 @@ describe("useChat — send", () => {
     expect(text).toBe("костюм");
     expect(files).toHaveLength(1);
     expect(history).toEqual([]); // первое сообщение — истории ещё нет
+  });
+});
+
+describe("useChat — память фото", () => {
+  const setup = () => renderHook(() => useChat());
+  const ok = () => sendChatRequest.mockResolvedValue({ text: "ок", image: null });
+
+  it("follow-up без повторного прикрепления переиспользует то же фото", async () => {
+    ok();
+    const { result } = setup();
+    act(() => {
+      result.current.actions.setInput("примерь костюм");
+      result.current.actions.addFiles([img("me.jpg")]);
+    });
+    await act(async () => void (await result.current.actions.send()));
+
+    // второй запрос — только текст, фото не прикрепляем заново
+    act(() => result.current.actions.setInput("собери образ"));
+    await act(async () => void (await result.current.actions.send()));
+
+    expect(sendChatRequest).toHaveBeenCalledTimes(2);
+    const secondFiles = sendChatRequest.mock.calls[1]![1] as File[];
+    expect(secondFiles).toHaveLength(1);
+    expect(secondFiles[0]!.name).toBe("me.jpg");
+  });
+
+  it("фото показывается в первом пузыре, но не дублируется на follow-up", async () => {
+    ok();
+    const { result } = setup();
+    act(() => {
+      result.current.actions.setInput("примерь костюм");
+      result.current.actions.addFiles([img()]);
+    });
+    await act(async () => void (await result.current.actions.send()));
+    act(() => result.current.actions.setInput("собери образ"));
+    await act(async () => void (await result.current.actions.send()));
+
+    const userMsgs = result.current.state.messages.filter((m) => m.role === "user");
+    expect(userMsgs[0]!.imageSrc).toBeTruthy(); // первый — с фото
+    expect(userMsgs[1]!.imageSrc).toBeUndefined(); // второй — без дубля
+  });
+
+  it("после отправки закреплённое фото само по себе не разрешает пустой follow-up", async () => {
+    ok();
+    const { result } = setup();
+    act(() => {
+      result.current.actions.setInput("примерь костюм");
+      result.current.actions.addFiles([img()]);
+    });
+    await act(async () => void (await result.current.actions.send()));
+
+    // ввод пуст, но фото закреплено — отправка должна быть заблокирована
+    expect(result.current.state.canSend).toBe(false);
+    await act(async () => void (await result.current.actions.send()));
+    expect(sendChatRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("новое фото снова показывается в пузыре", async () => {
+    ok();
+    const { result } = setup();
+    act(() => {
+      result.current.actions.setInput("примерь костюм");
+      result.current.actions.addFiles([img("a.jpg")]);
+    });
+    await act(async () => void (await result.current.actions.send()));
+
+    // заменяем фото
+    act(() => result.current.actions.removeAttachment(0));
+    act(() => {
+      result.current.actions.setInput("а теперь это");
+      result.current.actions.addFiles([img("b.jpg")]);
+    });
+    await act(async () => void (await result.current.actions.send()));
+
+    const userMsgs = result.current.state.messages.filter((m) => m.role === "user");
+    expect(userMsgs[1]!.imageSrc).toBeTruthy(); // новое фото снова показано
   });
 });
 
