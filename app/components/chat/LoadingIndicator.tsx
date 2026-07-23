@@ -8,7 +8,7 @@ export function LoadingIndicator() {
   const message = useLoadingMessages();
 
   return (
-    <div className="mr-auto max-w-[85%] rounded-2xl bg-white px-4 py-3 ring-1 ring-violet-100">
+    <div className="mr-auto max-w-[85%] rounded-2xl border border-lm-line bg-white px-4 py-3">
       <div
         className="flex items-center gap-2.5"
         role="status"

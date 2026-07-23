@@ -10,6 +10,13 @@
   --lm-sky: #e0f4ff;
   --lm-text: #1e293b;
   --lm-muted: #64748b;
+  /* Утончённый розовый акцент и волосяные границы для редизайна */
+  --lm-rose: #e1517c;
+  --lm-rose-ink: #c53c67;
+  --lm-rose-soft: #fbeaf0;
+  --lm-rose-softer: #fdf4f7;
+  --lm-line: #ece6e4;
+  --lm-line-strong: #e0d8d6;
 }
 
 @theme inline {
@@ -21,6 +28,12 @@
   --color-lm-sky: var(--lm-sky);
   --color-lm-text: var(--lm-text);
   --color-lm-muted: var(--lm-muted);
+  --color-lm-rose: var(--lm-rose);
+  --color-lm-rose-ink: var(--lm-rose-ink);
+  --color-lm-rose-soft: var(--lm-rose-soft);
+  --color-lm-rose-softer: var(--lm-rose-softer);
+  --color-lm-line: var(--lm-line);
+  --color-lm-line-strong: var(--lm-line-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -81,37 +94,7 @@ body {
 .lm-page-bg {
   position: relative;
   min-height: 100%;
-  background: linear-gradient(
-    135deg,
-    #fff5f7 0%,
-    #f5f0ff 35%,
-    #eef8ff 70%,
-    #fff9f5 100%
-  );
-}
-
-.lm-page-bg::before,
-.lm-page-bg::after {
-  content: "";
-  position: fixed;
-  border-radius: 50%;
-  filter: blur(80px);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.lm-page-bg::before {
-  width: 420px;
-  height: 420px;
-  top: -80px;
-  right: -60px;
-  background: rgba(255, 107, 138, 0.35);
-}
-
-.lm-page-bg::after {
-  width: 380px;
-  height: 380px;
-  bottom: 20%;
-  left: -80px;
-  background: rgba(196, 181, 253, 0.45);
+  /* Чистый тёплый фон с лёгким розовым отливом сверху — без размытых блобов. */
+  background:
+    linear-gradient(180deg, #fdf3f6 0%, #fdfbfa 420px, #fdfbfa 100%);
 }

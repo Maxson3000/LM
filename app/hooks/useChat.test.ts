@@ -231,9 +231,8 @@ describe("useChat — регрессии", () => {
     expect(result.current.actions).toBe(before);
   });
 
-  // Регрессия: «Новый чат» во время генерации не отменял запрос, и ответ
-  // прилетал в уже очищенный чат.
-  it("reset прерывает текущий запрос", async () => {
+  // Регрессия: удаление чата во время генерации должно отменять его запрос.
+  it("удаление чата прерывает его запрос", async () => {
     let capturedSignal: AbortSignal | undefined;
     sendChatRequest.mockImplementation((_t, _f, _h, signal: AbortSignal) => {
       capturedSignal = signal;
@@ -245,14 +244,16 @@ describe("useChat — регрессии", () => {
     act(() => void result.current.actions.send());
     await waitFor(() => expect(result.current.state.loading).toBe(true));
 
-    act(() => result.current.actions.reset());
+    const id = result.current.state.activeId;
+    act(() => result.current.actions.deleteConversation(id));
 
     expect(capturedSignal?.aborted).toBe(true);
+    // остался свежий пустой чат
     expect(result.current.state.loading).toBe(false);
     expect(result.current.state.messages).toHaveLength(0);
   });
 
-  it("отменённый ответ не попадает в чат", async () => {
+  it("ответ отменённого запроса не появляется после удаления чата", async () => {
     let rejectFn: (e: unknown) => void = () => {};
     sendChatRequest.mockImplementation(
       (_t, _f, _h, signal: AbortSignal) =>
@@ -268,12 +269,137 @@ describe("useChat — регрессии", () => {
     act(() => void result.current.actions.send());
     await waitFor(() => expect(result.current.state.loading).toBe(true));
 
+    const id = result.current.state.activeId;
     await act(async () => {
-      result.current.actions.reset();
+      result.current.actions.deleteConversation(id);
       rejectFn(new DOMException("aborted", "AbortError"));
     });
 
-    // после reset — чист, призрачный ответ не добавился
+    expect(result.current.state.messages).toHaveLength(0);
+  });
+});
+
+describe("useChat — мульти-чат", () => {
+  const ok = () => sendChatRequest.mockResolvedValue({ text: "ок", image: null });
+
+  it("стартует с одного пустого чата", () => {
+    const { result } = renderHook(() => useChat());
+    expect(result.current.state.conversations).toHaveLength(1);
+    expect(result.current.state.messages).toHaveLength(0);
+  });
+
+  it("newConversation создаёт новый чат и переключает на него", async () => {
+    ok();
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("примерь костюм"));
+    await act(async () => void (await result.current.actions.send()));
+
+    act(() => result.current.actions.newConversation());
+
+    expect(result.current.state.conversations).toHaveLength(2);
+    expect(result.current.state.messages).toHaveLength(0); // новый чат пуст
+  });
+
+  it("newConversation не плодит пустые чаты", () => {
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.newConversation());
+    act(() => result.current.actions.newConversation());
+    expect(result.current.state.conversations).toHaveLength(1);
+  });
+
+  it("заголовок чата берётся из первого сообщения", async () => {
+    ok();
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("деловой костюм на собеседование"));
+    await act(async () => void (await result.current.actions.send()));
+
+    expect(result.current.state.conversations[0]!.title).toContain("деловой костюм");
+  });
+
+  it("selectConversation переключает и показывает сообщения нужного чата", async () => {
+    ok();
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("первый"));
+    await act(async () => void (await result.current.actions.send()));
+    const firstId = result.current.state.activeId;
+
+    act(() => result.current.actions.newConversation());
+    act(() => result.current.actions.setInput("второй"));
+    await act(async () => void (await result.current.actions.send()));
+
+    act(() => result.current.actions.selectConversation(firstId));
+    expect(result.current.state.messages[0]).toMatchObject({ text: "первый" });
+  });
+
+  it("каждый чат помнит своё фото независимо", async () => {
+    ok();
+    const { result } = renderHook(() => useChat());
+    act(() => {
+      result.current.actions.setInput("примерь");
+      result.current.actions.addFiles([img("a.jpg")]);
+    });
+    await act(async () => void (await result.current.actions.send()));
+
+    act(() => result.current.actions.newConversation());
+    expect(result.current.state.attachments).toHaveLength(0); // новый чат — без фото
+  });
+
+  // Ключевое свойство фоновой генерации: ответ приходит в СВОЙ чат, даже если
+  // пользователь уже переключился на другой.
+  it("фоновая генерация завершается в своём чате после переключения", async () => {
+    let resolveFn: (v: unknown) => void = () => {};
+    sendChatRequest.mockImplementation(
+      () => new Promise((res) => { resolveFn = res; }),
+    );
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("в первом чате"));
+    act(() => void result.current.actions.send());
+    await waitFor(() => expect(result.current.state.loading).toBe(true));
+    const firstId = result.current.state.activeId;
+
+    // переключаемся на новый чат, пока первый генерит
+    act(() => result.current.actions.newConversation());
+    expect(result.current.state.messages).toHaveLength(0);
+
+    // ответ первого чата приходит
+    await act(async () => {
+      resolveFn({ text: "готово в первом", image: null });
+    });
+
+    // в активном (втором) — по-прежнему пусто
+    expect(result.current.state.messages).toHaveLength(0);
+    // а в первом появился ответ
+    act(() => result.current.actions.selectConversation(firstId));
+    expect(result.current.state.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      text: "готово в первом",
+    });
+  });
+
+  it("deleteConversation удаляет и переключает на оставшийся", async () => {
+    ok();
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("чат-1"));
+    await act(async () => void (await result.current.actions.send()));
+    act(() => result.current.actions.newConversation());
+    const secondId = result.current.state.activeId;
+
+    act(() => result.current.actions.deleteConversation(secondId));
+
+    expect(result.current.state.conversations).toHaveLength(1);
+    expect(result.current.state.messages[0]).toMatchObject({ text: "чат-1" });
+  });
+
+  it("удаление последнего чата оставляет один свежий пустой", async () => {
+    ok();
+    const { result } = renderHook(() => useChat());
+    act(() => result.current.actions.setInput("единственный"));
+    await act(async () => void (await result.current.actions.send()));
+
+    const id = result.current.state.activeId;
+    act(() => result.current.actions.deleteConversation(id));
+
+    expect(result.current.state.conversations).toHaveLength(1);
     expect(result.current.state.messages).toHaveLength(0);
   });
 });

@@ -44,7 +44,7 @@ describe("ChatComposer", () => {
     const user = userEvent.setup();
     renderComposer();
 
-    await user.type(screen.getByPlaceholderText(/Опиши желаемый образ/), "костюм");
+    await user.type(screen.getByPlaceholderText(/Опиши образ/), "костюм");
 
     expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled();
   });
@@ -55,7 +55,7 @@ describe("ChatComposer", () => {
     renderComposer();
 
     await user.type(
-      screen.getByPlaceholderText(/Опиши желаемый образ/),
+      screen.getByPlaceholderText(/Опиши образ/),
       "деловой костюм",
     );
     await user.click(screen.getByRole("button", { name: "Отправить" }));
@@ -70,7 +70,7 @@ describe("ChatComposer", () => {
     renderComposer();
 
     await user.type(
-      screen.getByPlaceholderText(/Опиши желаемый образ/),
+      screen.getByPlaceholderText(/Опиши образ/),
       "костюм{Enter}",
     );
 
@@ -82,7 +82,7 @@ describe("ChatComposer", () => {
     const user = userEvent.setup();
     renderComposer();
 
-    const field = screen.getByPlaceholderText(/Опиши желаемый образ/);
+    const field = screen.getByPlaceholderText(/Опиши образ/);
     await user.type(field, "костюм");
     await user.click(screen.getByRole("button", { name: "Отправить" }));
 

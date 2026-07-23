@@ -3,13 +3,21 @@
 import { useEffect, useRef } from "react";
 import { ChatComposer } from "./ChatComposer";
 import { ChatMessage } from "./ChatMessage";
-import { useChatActions, useChatState } from "./ChatProvider";
+import { useChatState } from "./ChatProvider";
 import { EmptyState } from "./EmptyState";
 import { LoadingIndicator } from "./LoadingIndicator";
 
-export function LookChat() {
-  const { messages, loading } = useChatState();
-  const { reset } = useChatActions();
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" className="h-[18px] w-[18px]">
+      <path d="M3 6h18M3 12h18M3 18h18" />
+    </svg>
+  );
+}
+
+export function LookChat({ onOpenSidebar }: { onOpenSidebar?: () => void }) {
+  const { messages, loading, conversations, activeId } = useChatState();
+  const title = conversations.find((c) => c.id === activeId)?.title ?? "Новый чат";
   const endRef = useRef<HTMLDivElement>(null);
 
   // Автопрокрутка вниз при новом сообщении и при появлении индикатора.
@@ -18,49 +26,41 @@ export function LookChat() {
   }, [messages.length, loading]);
 
   return (
-    <div
-      id="chat"
-      className="relative flex min-h-[calc(100vh-7rem)] flex-col sm:min-h-[calc(100vh-6rem)]"
-    >
-      <div className="pointer-events-none absolute -inset-1 rounded-[22px] bg-gradient-to-r from-rose-200/70 via-violet-200/70 to-sky-200/70 blur-xl" />
-
-      <div className="relative flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-[22px] border border-white/70 bg-white/75 shadow-xl shadow-violet-200/40 backdrop-blur-xl sm:min-h-[calc(100vh-6rem)]">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/60 px-4 py-3 sm:px-6 sm:py-4">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-800 sm:text-base">
-              ИИ-стилист LookMAX
-            </p>
-            <p className="truncate text-xs text-slate-500">
-              Опиши образ · прикрепи фото · получи рекомендации
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={reset}
-            disabled={messages.length === 0 && !loading}
-            className="shrink-0 rounded-full bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-600 ring-1 ring-violet-100 transition hover:bg-white disabled:opacity-40 sm:text-xs"
-          >
-            Новый чат
-          </button>
-        </header>
-
-        <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
-          {messages.length === 0 && !loading ? (
-            <EmptyState />
-          ) : (
-            <div className="mx-auto flex max-w-3xl flex-col gap-3">
-              {messages.map((m) => (
-                <ChatMessage key={m.id} msg={m} />
-              ))}
-              {loading && <LoadingIndicator />}
-              <div ref={endRef} />
-            </div>
-          )}
+    <div id="chat" className="flex h-full min-w-0 flex-col bg-white">
+      <header className="flex shrink-0 items-center gap-3 border-b border-lm-line px-4 py-3 sm:px-5">
+        <button
+          type="button"
+          onClick={onOpenSidebar}
+          aria-label="Показать список чатов"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-lm-line text-slate-600 transition hover:bg-lm-rose-softer hover:text-lm-rose-ink md:hidden"
+        >
+          <MenuIcon />
+        </button>
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold tracking-tight text-lm-text">
+            {title}
+          </h2>
+          <p className="truncate text-xs text-lm-muted">
+            Примерка образа или подбор от стилиста
+          </p>
         </div>
+      </header>
 
-        <ChatComposer />
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6">
+        {messages.length === 0 && !loading ? (
+          <EmptyState />
+        ) : (
+          <div className="mx-auto flex max-w-3xl flex-col gap-3">
+            {messages.map((m) => (
+              <ChatMessage key={m.id} msg={m} />
+            ))}
+            {loading && <LoadingIndicator />}
+            <div ref={endRef} />
+          </div>
+        )}
       </div>
+
+      <ChatComposer />
     </div>
   );
 }
